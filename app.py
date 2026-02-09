@@ -117,7 +117,6 @@ st.markdown(
         border: 1px solid rgba(34,197,94,0.35) !important;
         background: linear-gradient(180deg, rgba(34,197,94,0.24), rgba(34,197,94,0.09)) !important;
       }
-
       footer {visibility: hidden;}
     </style>
     """,
