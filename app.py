@@ -1,113 +1,167 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 from datetime import date
+from pathlib import Path
 
 # ============================================================
 # Page config
 # ============================================================
 st.set_page_config(
-    page_title="Walmart Weekly Sales Prediction",
-    page_icon="🛒",
+    page_title="Walmart Weekly Sales Forecasting",
+    page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# Theme / CSS (less “heavy”, more breathable)
+# DARK THEME CSS (black + dark blue, clean & professional)
 # ============================================================
 st.markdown(
     """
     <style>
-      /* App background */
-      [data-testid="stAppViewContainer"]{
-        background:
-          radial-gradient(1000px 500px at 14% 0%, rgba(37,99,235,0.20), transparent 55%),
-          radial-gradient(900px 500px at 92% 8%, rgba(99,102,241,0.14), transparent 60%),
-          linear-gradient(180deg, #050814 0%, #040711 45%, #04060f 100%);
+      /* Hide menu + footer only (KEEP header so sidebar toggle works) */
+      #MainMenu { visibility: hidden; }
+      footer { visibility: hidden; }
+
+      /* Make the top header dark & neat (no ugly bar) */
+      [data-testid="stHeader"]{
+        background: rgba(7,10,22,0.88) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        backdrop-filter: blur(12px);
+      }
+      [data-testid="stToolbar"]{
+        background: transparent !important;
       }
 
-      /* Main padding */
-      .block-container { padding-top: 1.4rem; padding-bottom: 2.2rem; }
+      /* Page background */
+      [data-testid="stAppViewContainer"]{
+        background:
+          radial-gradient(1000px 520px at 12% 0%, rgba(37,99,235,0.22), transparent 58%),
+          radial-gradient(900px 520px at 92% 10%, rgba(99,102,241,0.16), transparent 60%),
+          linear-gradient(180deg, #050816 0%, #050812 55%, #04050f 100%);
+        background-attachment: fixed;
+      }
+
+      /* Add space so heading isn't too close to top bar */
+      .block-container{
+        padding-top: 2.2rem;
+        padding-bottom: 2rem;
+        max-width: 1400px;
+      }
+
+      /* Force text readable on dark bg */
+      html, body, [class*="css"] { color: rgba(255,255,255,0.92) !important; }
+      h1,h2,h3,h4,h5,h6,p,span,div,label { color: rgba(255,255,255,0.92) !important; }
+
+      .muted{ color: rgba(255,255,255,0.65) !important; }
 
       /* Sidebar */
       [data-testid="stSidebar"]{
-        background: linear-gradient(180deg, rgba(10,15,30,0.96) 0%, rgba(5,8,20,0.99) 100%);
+        background: linear-gradient(180deg, rgba(10,14,30,0.98) 0%, rgba(6,9,18,0.99) 100%);
         border-right: 1px solid rgba(255,255,255,0.08);
       }
 
-      /* Typography tweaks */
-      h1,h2,h3 { letter-spacing: -0.3px; }
-      .muted { color: rgba(255,255,255,0.72); font-size: 0.98rem; line-height: 1.4; }
-      .tiny  { color: rgba(255,255,255,0.62); font-size: 0.88rem; }
-      .divider { height: 1px; background: rgba(255,255,255,0.10); margin: 1.0rem 0; }
-
-      /* Pills */
-      .pill {
-        display:inline-block;
-        padding: .28rem .72rem;
-        border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(255,255,255,0.06);
-        font-size: .85rem;
-        color: rgba(255,255,255,0.82);
-        margin-right: .35rem;
-        margin-bottom: .35rem;
-      }
+      .sb-title{ font-size: 1.1rem; font-weight: 900; margin: 0.2rem 0 0.1rem 0; }
+      .sb-sub{ font-size: 0.9rem; color: rgba(255,255,255,0.65) !important; margin-bottom: 0.8rem; }
 
       /* Cards */
-      .card {
+      .card{
         border: 1px solid rgba(255,255,255,0.10);
         background: rgba(255,255,255,0.04);
         border-radius: 18px;
-        padding: 1.05rem 1.10rem;
-        box-shadow: 0 12px 28px rgba(0,0,0,0.32);
+        padding: 1.05rem 1.1rem;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.35);
       }
-
-      .soft-card {
-        border: 1px solid rgba(255,255,255,0.10);
+      .card-soft{
+        border: 1px dashed rgba(99,102,241, 0.45);
         background: rgba(255,255,255,0.03);
         border-radius: 18px;
-        padding: 0.95rem 1.05rem;
+        padding: 1rem 1.1rem;
+      }
+
+      .kpi-title{
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.65) !important;
+        font-weight: 800;
+      }
+      .kpi-value{
+        font-size: 1.7rem;
+        font-weight: 950;
+        margin-top: 0.1rem;
+        background: linear-gradient(90deg, #93c5fd 0%, #a78bfa 55%, #f472b6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .kpi-sub{
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.62) !important;
+        margin-top: 0.25rem;
+      }
+
+      /* Inputs */
+      [data-baseweb="select"] > div,
+      .stNumberInput input,
+      .stDateInput input,
+      .stTextInput input {
+        border-radius: 12px !important;
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        color: rgba(255,255,255,0.92) !important;
+      }
+      label{ color: rgba(255,255,255,0.85) !important; font-weight: 800 !important; }
+
+      /* Sidebar radio menu */
+      div[role="radiogroup"] label{
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 0.65rem 0.75rem;
+        border-radius: 14px;
+        margin-bottom: 0.45rem;
+        transition: all 0.15s ease;
+      }
+      div[role="radiogroup"] label:hover{
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.30);
+        transform: translateY(-1px);
       }
 
       /* Buttons */
       .stButton>button, .stDownloadButton>button {
         border-radius: 14px !important;
         border: 1px solid rgba(255,255,255,0.14) !important;
-        background: linear-gradient(180deg, rgba(37,99,235,0.22), rgba(37,99,235,0.08)) !important;
+        background: linear-gradient(180deg, rgba(99,102,241,0.22), rgba(99,102,241,0.10)) !important;
         color: rgba(255,255,255,0.92) !important;
-        padding: 0.68rem 0.95rem !important;
+        font-weight: 900 !important;
+        padding: 0.75rem 1rem !important;
       }
       .stButton>button:hover, .stDownloadButton>button:hover {
-        border: 1px solid rgba(99,102,241,0.35) !important;
-        background: linear-gradient(180deg, rgba(99,102,241,0.28), rgba(37,99,235,0.10)) !important;
+        border: 1px solid rgba(99,102,241,0.40) !important;
+        background: linear-gradient(180deg, rgba(99,102,241,0.30), rgba(99,102,241,0.12)) !important;
       }
 
-      /* Inputs */
-      [data-baseweb="select"] > div, .stTextInput input, .stDateInput input {
-        border-radius: 12px !important;
-        background: rgba(255,255,255,0.05) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-      }
-
-      /* Reduce “crowded” gaps a bit */
-      [data-testid="stVerticalBlock"] { gap: 0.8rem; }
-
-      /* Hide Streamlit footer */
-      footer {visibility: hidden;}
+      /* Dataframe */
+      .stDataFrame { border-radius: 14px; overflow: hidden; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# Load model + feature columns
+# Load model + columns (safe path for Streamlit Cloud)
 # ============================================================
+APP_DIR = Path(__file__).parent
+MODEL_PATH = APP_DIR / "model.pkl"
+COLS_PATH = APP_DIR / "columns.pkl"
+
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load("model.pkl")
-    cols = joblib.load("columns.pkl")  # list of feature names expected by model
+    if not MODEL_PATH.exists() or not COLS_PATH.exists():
+        st.error("⚠️ model.pkl / columns.pkl not found. Put them beside app.py in your repo.")
+        st.stop()
+    model = joblib.load(MODEL_PATH)
+    cols = joblib.load(COLS_PATH)
+    cols = list(cols) if not isinstance(cols, list) else cols
     return model, cols
 
 model, feature_cols = load_artifacts()
@@ -120,19 +174,14 @@ def money(x: float) -> str:
 
 def validate_inputs(temp, fuel, cpi, unemp):
     issues = []
-    if fuel <= 0:
-        issues.append("Fuel Price must be > 0.")
-    if cpi <= 0:
-        issues.append("CPI must be > 0.")
-    if not (-10 <= temp <= 120):
-        issues.append("Temperature looks unrealistic. Keep within -10°F to 120°F.")
-    if not (0 <= unemp <= 25):
-        issues.append("Unemployment rate looks unrealistic. Keep within 0% to 25%.")
+    if fuel < 0: issues.append("Fuel Price must be ≥ 0.")
+    if cpi < 0: issues.append("CPI must be ≥ 0.")
+    if not (-10 <= temp <= 120): issues.append("Temperature should be between -10°F and 120°F.")
+    if not (0 <= unemp <= 25): issues.append("Unemployment should be between 0% and 25%.")
     return issues
 
-def build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date, feature_cols):
+def build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date):
     dt = pd.to_datetime(week_date)
-
     base = {
         "Store": int(store),
         "Holiday_Flag": int(holiday_flag),
@@ -140,36 +189,32 @@ def build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date, featu
         "Fuel_Price": float(fuel),
         "CPI": float(cpi),
         "Unemployment": float(unemp),
-
-        # Safe date-derived features (only used if expected)
         "Year": int(dt.year),
         "Month": int(dt.month),
         "WeekOfYear": int(dt.isocalendar().week),
         "DayOfWeek": int(dt.dayofweek),
     }
-
     X = pd.DataFrame([base]).reindex(columns=feature_cols, fill_value=0)
     X = X.apply(pd.to_numeric, errors="coerce").fillna(0)
     return X
 
 def predict_one(store, holiday_flag, temp, fuel, cpi, unemp, week_date):
-    X = build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date, feature_cols)
+    X = build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date)
     pred = float(model.predict(X)[0])
     return pred, X
 
 # ============================================================
-# Session state
+# Defaults
 # ============================================================
-DEFAULTS = {
-    "store": 1,
+RESET_DEFAULTS = {
+    "store": 1,  # can't be 0 because dropdown
     "holiday_label": "Non-holiday Week",
-    "temp": 60.0,
-    "fuel": 3.50,
-    "cpi": 180.0,
-    "unemp": 7.50,
+    "temp": 0.0,
+    "fuel": 0.0,
+    "cpi": 0.0,
+    "unemp": 0.0,
     "week_date": date(2012, 2, 10),
 }
-
 EXAMPLE = {
     "store": 5,
     "holiday_label": "Holiday Week",
@@ -180,122 +225,128 @@ EXAMPLE = {
     "week_date": date(2011, 11, 25),
 }
 
-for k, v in DEFAULTS.items():
+for k, v in RESET_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 if "history" not in st.session_state:
     st.session_state.history = []
-
 if "last_result" not in st.session_state:
-    st.session_state.last_result = None  # dict with pred, X_used, etc.
+    st.session_state.last_result = None
+
+# Widget keys (avoid session_state mutation errors)
+WIDGET_MAP = {
+    "store_w": "store",
+    "week_date_w": "week_date",
+    "holiday_label_w": "holiday_label",
+    "temp_w": "temp",
+    "fuel_w": "fuel",
+    "cpi_w": "cpi",
+    "unemp_w": "unemp",
+}
+for w_key, state_key in WIDGET_MAP.items():
+    if w_key not in st.session_state:
+        st.session_state[w_key] = st.session_state[state_key]
+
+def sync_widgets_to_state():
+    for w_key, state_key in WIDGET_MAP.items():
+        st.session_state[state_key] = st.session_state[w_key]
+
+if "pending_preset" not in st.session_state:
+    st.session_state.pending_preset = None
+
+def queue_preset(name: str):
+    st.session_state.pending_preset = name
+    st.rerun()
+
+def apply_pending_preset():
+    name = st.session_state.pending_preset
+    if not name:
+        return
+    preset = EXAMPLE if name == "example" else RESET_DEFAULTS
+
+    st.session_state["store_w"] = preset["store"]
+    st.session_state["week_date_w"] = preset["week_date"]
+    st.session_state["holiday_label_w"] = preset["holiday_label"]
+    st.session_state["temp_w"] = preset["temp"]
+    st.session_state["fuel_w"] = preset["fuel"]
+    st.session_state["cpi_w"] = preset["cpi"]
+    st.session_state["unemp_w"] = preset["unemp"]
+
+    if name == "reset":
+        st.session_state.history = []
+        st.session_state.last_result = None
+
+    sync_widgets_to_state()
+    st.session_state.pending_preset = None
+
+apply_pending_preset()
 
 # ============================================================
-# Header (hero layout)
-# ============================================================
-top_left, top_right = st.columns([0.72, 0.28], gap="large")
-
-with top_left:
-    st.markdown("# 🛒 Walmart Weekly Sales Prediction")
-    st.markdown(
-        """
-        <span class="pill">Supervised ML · Regression</span>
-        <span class="pill">Streamlit Deployment</span>
-        <span class="pill">Input Validation</span>
-        <span class="pill">What-if Analysis</span>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<div class='muted'>Estimate weekly sales using store conditions and economic indicators. "
-        "Useful for inventory planning and staffing decisions during peak weeks.</div>",
-        unsafe_allow_html=True,
-    )
-
-with top_right:
-    # Small “status” card to reduce crowding
-    st.markdown(
-        """
-        <div class="soft-card">
-          <div class="tiny">App Status</div>
-          <div style="font-weight:800; font-size:1.05rem;">Ready to Predict ✅</div>
-          <div class="tiny" style="margin-top:.35rem;">Model loaded from <code>model.pkl</code></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-# ============================================================
-# Sidebar (less crowded: essentials first, advanced in expanders)
+# Sidebar
 # ============================================================
 with st.sidebar:
-    st.markdown("## Inputs")
-    st.caption("Enter the week conditions, then run prediction.")
+    st.markdown('<div class="sb-title">📊 Walmart Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-sub">Forecasting + analytics</div>', unsafe_allow_html=True)
 
-    with st.form("input_form", clear_on_submit=False):
+    page = st.radio(
+        "Navigation",
+        ["🏠 Overview", "🧮 Predict", "📈 Insights", "ℹ️ About"],
+        label_visibility="collapsed",
+    )
+
+    st.markdown("---")
+
+    if page == "🧮 Predict":
+        st.markdown("### Inputs")
+
+        st.selectbox("Store", list(range(1, 46)), key="store_w")
+        st.date_input("Week Date", key="week_date_w")
+        st.selectbox("Week Type", ["Non-holiday Week", "Holiday Week"], key="holiday_label_w")
+        st.slider("Temperature (°F)", -5.0, 105.0, step=0.1, key="temp_w")
+
+        with st.expander("Advanced Inputs", expanded=False):
+            st.slider("Fuel Price", 0.0, 5.0, step=0.01, key="fuel_w")
+            st.slider("CPI", 0.0, 230.0, step=0.1, key="cpi_w")
+            st.slider("Unemployment (%)", 0.0, 25.0, step=0.01, key="unemp_w")
+
+        sync_widgets_to_state()
+
+        st.markdown("### Actions")
         c1, c2 = st.columns(2)
         with c1:
-            st.selectbox("Store", list(range(1, 46)), key="store")
+            predict_btn = st.button("Predict", use_container_width=True)
         with c2:
-            st.date_input("Week Date", key="week_date")
+            compare_btn = st.button("Compare", use_container_width=True)
 
-        st.selectbox("Week Type", ["Non-holiday Week", "Holiday Week"], key="holiday_label")
+        c3, c4 = st.columns(2)
+        with c3:
+            if st.button("Example", use_container_width=True):
+                queue_preset("example")
+        with c4:
+            if st.button("Reset", use_container_width=True):
+                queue_preset("reset")
 
-        st.slider("Temperature (°F)", min_value=-5.0, max_value=105.0, step=0.1, key="temp")
+        st.markdown("---")
 
-        with st.expander("Advanced: Economic Indicators", expanded=False):
-            st.slider("Fuel Price", min_value=2.0, max_value=5.0, step=0.01, key="fuel")
-            st.slider("CPI", min_value=120.0, max_value=230.0, step=0.1, key="cpi")
-            st.slider("Unemployment Rate (%)", min_value=3.0, max_value=15.0, step=0.01, key="unemp")
-
-        b1, b2 = st.columns(2)
-        with b1:
-            predict_btn = st.form_submit_button("Predict", use_container_width=True)
-        with b2:
-            compare_btn = st.form_submit_button("Holiday vs Non-holiday", use_container_width=True)
-
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-    st.markdown("### Quick Actions")
-    q1, q2 = st.columns(2)
-    with q1:
-        if st.button("Load Example", use_container_width=True):
-            for k, v in EXAMPLE.items():
-                st.session_state[k] = v
-            st.success("Example loaded ✅")
-            st.rerun()
-
-    with q2:
-        if st.button("Reset", use_container_width=True):
-            for k, v in DEFAULTS.items():
-                st.session_state[k] = v
-            st.info("Reset done ✅")
-            st.rerun()
-
-    q3, q4 = st.columns(2)
-    with q3:
-        if st.button("Clear History", use_container_width=True):
-            st.session_state.history = []
-            st.session_state.last_result = None
-            st.success("History cleared ✅")
-            st.rerun()
-
-    with q4:
         if len(st.session_state.history) > 0:
             hist_df_dl = pd.DataFrame(st.session_state.history)
             st.download_button(
-                "Download CSV",
+                "Download history (CSV)",
                 data=hist_df_dl.to_csv(index=False).encode("utf-8"),
                 file_name="prediction_history.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
         else:
-            st.button("Download CSV", disabled=True, use_container_width=True)
+            st.button("Download history (CSV)", disabled=True, use_container_width=True)
+    else:
+        predict_btn = False
+        compare_btn = False
 
-# Read current state
+# ============================================================
+# Read inputs
+# ============================================================
 store = st.session_state.store
 holiday_flag = 1 if st.session_state.holiday_label == "Holiday Week" else 0
 temp = st.session_state.temp
@@ -305,298 +356,209 @@ unemp = st.session_state.unemp
 week_date = st.session_state.week_date
 
 # ============================================================
-# Tabs (cleaner responsibilities)
+# Main header
 # ============================================================
-tab1, tab2, tab3, tab4 = st.tabs(["📌 Predict", "📈 Insights", "🧪 Model Performance", "ℹ️ About"])
+st.markdown("## Walmart Weekly Sales Forecasting")
+st.markdown('<div class="muted">Predict weekly sales using store + economic indicators. Includes what-if comparison.</div>', unsafe_allow_html=True)
+st.markdown("")
 
 # ============================================================
-# TAB 1: Predict
+# Pages
 # ============================================================
-with tab1:
-    left, right = st.columns([0.66, 0.34], gap="large")
+if page == "🏠 Overview":
+    hist = pd.DataFrame(st.session_state.history) if len(st.session_state.history) else pd.DataFrame()
+    if len(hist):
+        hist["pred_sales"] = pd.to_numeric(hist["pred_sales"], errors="coerce")
+        hist = hist.dropna(subset=["pred_sales"])
 
-    # ---- LEFT: Output area
-    with left:
-        st.markdown("## Prediction Output")
+    last_pred = st.session_state.last_result
 
-        issues = validate_inputs(temp, fuel, cpi, unemp)
+    k1, k2, k3, k4 = st.columns(4, gap="large")
+    with k1:
+        val = money(last_pred["pred"]) if (last_pred and last_pred.get("mode") == "single") else "—"
+        st.markdown(f"""<div class="card"><div class="kpi-title">Latest Forecast</div><div class="kpi-value">{val}</div><div class="kpi-sub">Most recent</div></div>""", unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""<div class="card"><div class="kpi-title">Selected Store</div><div class="kpi-value">{store}</div><div class="kpi-sub">Current input</div></div>""", unsafe_allow_html=True)
+    with k3:
+        wt = "Holiday" if holiday_flag == 1 else "Non-holiday"
+        st.markdown(f"""<div class="card"><div class="kpi-title">Week Type</div><div class="kpi-value">{wt}</div><div class="kpi-sub">Seasonality</div></div>""", unsafe_allow_html=True)
+    with k4:
+        st.markdown(f"""<div class="card"><div class="kpi-title">Predictions</div><div class="kpi-value">{len(st.session_state.history)}</div><div class="kpi-sub">This session</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("### Forecast Trend")
+    if len(hist) >= 2:
+        st.line_chart(hist["pred_sales"])
+    else:
+        st.markdown('<div class="card-soft"><div class="muted">Make at least 2 predictions to see a trend.</div></div>', unsafe_allow_html=True)
+
+    st.markdown("### Recent Predictions")
+    if len(hist):
+        st.dataframe(hist.tail(10).iloc[::-1], use_container_width=True)
+    else:
+        st.markdown('<div class="card-soft"><div class="muted">No predictions yet. Go to <b>Predict</b>.</div></div>', unsafe_allow_html=True)
+
+elif page == "🧮 Predict":
+    issues = validate_inputs(temp, fuel, cpi, unemp)
+    if issues:
+        st.warning("Input validation found issues:")
+        for msg in issues:
+            st.write(f"• {msg}")
+
+    if predict_btn:
         if issues:
-            st.warning("Input check: please review these before predicting.")
-            for msg in issues:
-                st.write(f"• {msg}")
+            st.error("Fix the issues above, then predict again.")
+        else:
+            pred, X_used = predict_one(store, holiday_flag, temp, fuel, cpi, unemp, week_date)
+            st.session_state.last_result = {
+                "mode": "single",
+                "pred": pred,
+                "store": store,
+                "holiday_flag": holiday_flag,
+                "week_date": str(week_date),
+                "X_used": X_used,
+            }
+            st.session_state.history.append({
+                "date": str(week_date),
+                "store": int(store),
+                "holiday_flag": int(holiday_flag),
+                "temperature": float(temp),
+                "fuel_price": float(fuel),
+                "cpi": float(cpi),
+                "unemployment": float(unemp),
+                "pred_sales": float(pred),
+            })
+            st.success("Prediction generated successfully ✅")
 
-        # Predict
-        if predict_btn:
-            if issues:
-                st.error("Fix the input issues above, then try again.")
-            else:
-                try:
-                    pred, X_used = predict_one(store, holiday_flag, temp, fuel, cpi, unemp, week_date)
+    if compare_btn:
+        if issues:
+            st.error("Fix the issues above, then compare again.")
+        else:
+            pred_non, X_non = predict_one(store, 0, temp, fuel, cpi, unemp, week_date)
+            pred_hol, X_hol = predict_one(store, 1, temp, fuel, cpi, unemp, week_date)
+            diff = pred_hol - pred_non
+            pct = (diff / pred_non * 100) if pred_non != 0 else 0.0
 
-                    st.session_state.last_result = {
-                        "mode": "single",
-                        "pred": pred,
-                        "store": store,
-                        "holiday_flag": holiday_flag,
-                        "week_date": str(week_date),
-                        "X_used": X_used,
-                    }
+            st.session_state.last_result = {
+                "mode": "compare",
+                "pred_non": pred_non,
+                "pred_hol": pred_hol,
+                "diff": diff,
+                "pct": pct,
+                "store": store,
+                "week_date": str(week_date),
+                "X_non": X_non,
+                "X_hol": X_hol,
+            }
+            st.info("What-if comparison done ✅")
 
-                    st.session_state.history.append({
-                        "date": str(week_date),
-                        "store": int(store),
-                        "holiday_flag": int(holiday_flag),
-                        "temperature": float(temp),
-                        "fuel_price": float(fuel),
-                        "cpi": float(cpi),
-                        "unemployment": float(unemp),
-                        "pred_sales": float(pred),
-                    })
+    left, right = st.columns([0.68, 0.32], gap="large")
 
-                    st.success("Prediction generated successfully ✅")
-
-                except Exception as e:
-                    st.error("Prediction failed. Please try again.")
-                    st.exception(e)
-
-        # Compare
-        if compare_btn:
-            if issues:
-                st.error("Fix the input issues above, then try again.")
-            else:
-                try:
-                    pred_non, X_non = predict_one(store, 0, temp, fuel, cpi, unemp, week_date)
-                    pred_hol, X_hol = predict_one(store, 1, temp, fuel, cpi, unemp, week_date)
-
-                    diff = pred_hol - pred_non
-                    pct = (diff / pred_non * 100) if pred_non != 0 else 0.0
-
-                    st.session_state.last_result = {
-                        "mode": "compare",
-                        "pred_non": pred_non,
-                        "pred_hol": pred_hol,
-                        "diff": diff,
-                        "pct": pct,
-                        "store": store,
-                        "week_date": str(week_date),
-                        "X_non": X_non,
-                        "X_hol": X_hol,
-                    }
-
-                    st.session_state.history.append({
-                        "date": str(week_date),
-                        "store": int(store),
-                        "holiday_flag": "compare",
-                        "temperature": float(temp),
-                        "fuel_price": float(fuel),
-                        "cpi": float(cpi),
-                        "unemployment": float(unemp),
-                        "pred_sales": float(pred_hol),
-                    })
-
-                    st.info("What-if analysis complete: only Holiday_Flag changed ✅")
-
-                except Exception as e:
-                    st.error("Comparison failed. Please try again.")
-                    st.exception(e)
-
-        # ---- Render last result (clean, non-crowded)
+    with left:
+        st.markdown("### Output")
         res = st.session_state.last_result
+
         if res is None:
             st.markdown(
-                """
-                <div class="card">
-                  <div style="font-weight:800; font-size:1.05rem;">No output yet</div>
-                  <div class="muted" style="margin-top:.35rem;">
-                    Use the sidebar to enter inputs, then click <b>Predict</b> or <b>Holiday vs Non-holiday</b>.
-                  </div>
-                </div>
-                """,
+                """<div class="card-soft"><div class="muted">No output yet. Use sidebar inputs and click <b>Predict</b> or <b>Compare</b>.</div></div>""",
                 unsafe_allow_html=True,
             )
         else:
-            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
             if res["mode"] == "single":
-                k1, k2, k3 = st.columns(3)
-                with k1:
-                    st.metric("Predicted Weekly Sales", money(res["pred"]))
-                with k2:
-                    st.metric("Store ID", str(res["store"]))
-                with k3:
-                    st.metric("Week Type", "Holiday" if res["holiday_flag"] == 1 else "Non-holiday")
+                a, b, c = st.columns(3, gap="large")
+                with a:
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Predicted Weekly Sales</div><div class="kpi-value">{money(res["pred"])}</div><div class="kpi-sub">Estimated revenue</div></div>""", unsafe_allow_html=True)
+                with b:
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Store</div><div class="kpi-value">{res["store"]}</div><div class="kpi-sub">Store selected</div></div>""", unsafe_allow_html=True)
+                with c:
+                    wt = "Holiday" if res["holiday_flag"] == 1 else "Non-holiday"
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Week Type</div><div class="kpi-value">{wt}</div><div class="kpi-sub">Seasonality</div></div>""", unsafe_allow_html=True)
 
-                with st.expander("See input values used (model features)"):
+                with st.expander("See model features used"):
                     st.dataframe(res["X_used"], use_container_width=True)
 
             if res["mode"] == "compare":
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Non-holiday Prediction", money(res["pred_non"]))
-                with c2:
-                    st.metric("Holiday Prediction", money(res["pred_hol"]))
-                with c3:
-                    # delta style
-                    st.metric("Estimated Uplift", money(res["diff"]), f"{res['pct']:.2f}%")
+                a, b, c = st.columns(3, gap="large")
+                with a:
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Non-holiday</div><div class="kpi-value">{money(res["pred_non"])}</div><div class="kpi-sub">Holiday_Flag = 0</div></div>""", unsafe_allow_html=True)
+                with b:
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Holiday</div><div class="kpi-value">{money(res["pred_hol"])}</div><div class="kpi-sub">Holiday_Flag = 1</div></div>""", unsafe_allow_html=True)
+                with c:
+                    st.markdown(f"""<div class="card"><div class="kpi-title">Uplift</div><div class="kpi-value">{money(res["diff"])}</div><div class="kpi-sub">{res["pct"]:.2f}% change</div></div>""", unsafe_allow_html=True)
 
-                with st.expander("See both feature inputs (debug/validation)"):
-                    st.write("Non-holiday features:")
-                    st.dataframe(res["X_non"], use_container_width=True)
-                    st.write("Holiday features:")
-                    st.dataframe(res["X_hol"], use_container_width=True)
-
-        # ---- History (kept but less noisy: inside expander)
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-        st.markdown("## Prediction History (this session)")
-
+        st.markdown("### Session History")
         if len(st.session_state.history) == 0:
             st.caption("No predictions yet.")
         else:
             hist_df = pd.DataFrame(st.session_state.history).iloc[::-1].reset_index(drop=True)
-
             with st.expander("Show history table", expanded=False):
                 st.dataframe(hist_df, use_container_width=True)
 
-            # Small trend preview (only if we have numeric preds)
             numeric_hist = hist_df.copy()
             numeric_hist["pred_sales"] = pd.to_numeric(numeric_hist["pred_sales"], errors="coerce")
             numeric_hist = numeric_hist.dropna(subset=["pred_sales"])
-
             if len(numeric_hist) >= 2:
-                st.markdown("### Trend Preview")
+                st.markdown("### Trend (Predicted Sales)")
                 st.line_chart(numeric_hist["pred_sales"])
 
-    # ---- RIGHT: Feedback + Summary (one clean column)
     with right:
-        st.markdown("## User-friendly Feedback")
+        st.markdown("### Guidance")
         st.markdown(
             """
             <div class="card">
-              <div class="muted">
-                <b>Why we validate inputs:</b><br>
-                Prevents crashes and keeps predictions realistic for users.<br><br>
-                <b>How to score well:</b><br>
-                Use <b>Holiday vs Non-holiday</b> to demonstrate interactive decision support.
+              <div class="kpi-title">Tips</div>
+              <div class="kpi-sub">
+                <b>Validation:</b> prevents unrealistic inputs from skewing predictions.<br><br>
+                <b>Compare:</b> shows business impact of holiday vs non-holiday weeks.
               </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-        st.markdown("## Quick Summary")
         st.markdown(
             f"""
-            <div class="card">
-              <div class="tiny">Selected Store</div>
-              <div style="font-size:2.0rem; font-weight:850; margin:.1rem 0 .55rem 0;">{store}</div>
-              <div class="tiny">Week Date</div>
-              <div class="muted">{week_date}</div>
-              <div class="tiny" style="margin-top:.55rem;">Week Type</div>
-              <div class="muted">{'Holiday' if holiday_flag==1 else 'Non-holiday'}</div>
+            <div class="card" style="margin-top:0.9rem;">
+              <div class="kpi-title">Quick Summary</div>
+              <div class="kpi-sub"><b>Store:</b> {store}</div>
+              <div class="kpi-sub"><b>Week Date:</b> {week_date}</div>
+              <div class="kpi-sub"><b>Week Type:</b> {'Holiday' if holiday_flag==1 else 'Non-holiday'}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-        st.markdown("## Input Validation Rules")
-        st.markdown(
-            """
-            <div class="soft-card">
-              <div class="muted">
-                • Fuel Price must be > 0<br>
-                • CPI must be > 0<br>
-                • Temperature should be within -10°F to 120°F<br>
-                • Unemployment should be within 0% to 25%
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+elif page == "📈 Insights":
+    st.markdown("## Insights")
+    st.markdown('<div class="muted">Simple analytics from your session predictions.</div>', unsafe_allow_html=True)
 
-# ============================================================
-# TAB 2: Insights (move “busy” content away from Predict tab)
-# ============================================================
-with tab2:
-    st.markdown("## Business Insights (Retail Context)")
-    st.markdown(
-        """
-        <div class="card">
-          <div class="muted">
-            <b>Inventory Planning:</b> Higher predicted sales → stock fast-moving items and essentials.<br>
-            <b>Staffing:</b> Holiday weeks often need more manpower and extended operating hours.<br>
-            <b>Economic Context:</b> CPI and unemployment can influence purchasing power and shopping behaviour.
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    hist = pd.DataFrame(st.session_state.history) if len(st.session_state.history) else pd.DataFrame()
+    if len(hist):
+        hist["pred_sales"] = pd.to_numeric(hist["pred_sales"], errors="coerce")
+        hist = hist.dropna(subset=["pred_sales"])
 
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    a, b, c = st.columns(3, gap="large")
+    with a:
+        st.markdown(f"""<div class="card"><div class="kpi-title">Predictions</div><div class="kpi-value">{len(st.session_state.history)}</div><div class="kpi-sub">This session</div></div>""", unsafe_allow_html=True)
+    with b:
+        st.markdown(f"""<div class="card"><div class="kpi-title">Avg Forecast</div><div class="kpi-value">{money(hist["pred_sales"].mean()) if len(hist) else "—"}</div><div class="kpi-sub">Mean</div></div>""", unsafe_allow_html=True)
+    with c:
+        st.markdown(f"""<div class="card"><div class="kpi-title">Max Forecast</div><div class="kpi-value">{money(hist["pred_sales"].max()) if len(hist) else "—"}</div><div class="kpi-sub">Peak</div></div>""", unsafe_allow_html=True)
 
-    if len(st.session_state.history) >= 1:
-        hist_df = pd.DataFrame(st.session_state.history).copy()
-        hist_df["pred_sales"] = pd.to_numeric(hist_df["pred_sales"], errors="coerce")
-        hist_df = hist_df.dropna(subset=["pred_sales"])
-
-        st.markdown("## Session Analytics")
-        a, b, c = st.columns(3)
-        with a:
-            st.metric("Predictions Made", str(len(st.session_state.history)))
-        with b:
-            if len(hist_df) > 0:
-                st.metric("Avg Predicted Sales", money(hist_df["pred_sales"].mean()))
-            else:
-                st.metric("Avg Predicted Sales", "—")
-        with c:
-            if len(hist_df) > 0:
-                st.metric("Max Predicted Sales", money(hist_df["pred_sales"].max()))
-            else:
-                st.metric("Max Predicted Sales", "—")
-
-        if len(hist_df) >= 2:
-            st.markdown("### Predicted Sales Trend (Session)")
-            st.line_chart(hist_df["pred_sales"])
+    if len(hist) >= 2:
+        st.markdown("### Trend")
+        st.line_chart(hist["pred_sales"])
     else:
-        st.caption("Run at least one prediction to unlock session analytics.")
+        st.caption("Make at least 2 predictions to see analytics.")
 
-# ============================================================
-# TAB 3: Model Performance
-# ============================================================
-with tab3:
-    st.markdown("## Model Performance Summary")
-    st.caption("Add your final MAE/RMSE comparison table here (or paste results).")
-
+else:
+    st.markdown("## About")
     st.markdown(
         """
         <div class="card">
-          <div class="muted">
-            <b>Metrics used:</b><br>
-            • <b>MAE</b> = average absolute error (business-friendly).<br>
-            • <b>RMSE</b> = penalises large errors (important for holiday spikes).<br><br>
-            <b>Recommended evidence:</b><br>
-            • Final comparison table (baseline vs improved models)<br>
-            • Predicted vs Actual plot for best model
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ============================================================
-# TAB 4: About
-# ============================================================
-with tab4:
-    st.markdown("## About this Application")
-    st.markdown(
-        """
-        <div class="card">
-          <div class="muted">
-            <b>Goal:</b> Predict weekly Walmart sales to support operational planning.<br>
-            <b>Type:</b> Supervised Learning (Regression).<br>
-            <b>Model:</b> scikit-learn model loaded from <code>model.pkl</code>.<br>
-            <b>Deployment:</b> Streamlit app with validation, what-if analysis, and session history export.
+          <div class="kpi-title">Summary</div>
+          <div class="kpi-sub">
+            Predict weekly Walmart sales to support planning (inventory, staffing, promotions).<br>
+            Includes validation, what-if comparison, and CSV export.
           </div>
         </div>
         """,
