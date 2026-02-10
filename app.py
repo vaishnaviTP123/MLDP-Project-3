@@ -89,6 +89,18 @@ st.markdown(
       }
       footer {visibility: hidden;}
       #MainMenu {visibility: hidden;}
+
+      /* ===== Hide Streamlit top header/toolbar ===== */
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+header { display: none !important; }
+
+/* ===== Ensure page can scroll normally ===== */
+html, body { overflow: auto !important; height: auto !important; }
+
+/* ===== Give a little breathing room at top (optional) ===== */
+.block-container { padding-top: 1.2rem !important; }
+
     </style>
     """,
     unsafe_allow_html=True,
