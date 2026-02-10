@@ -47,13 +47,13 @@ st.markdown(
       .sb-sub{ color: rgba(255,255,255,0.62); font-size: 0.88rem; margin-bottom: 0.9rem; }
 
       /* ====== NAVBAR (fake top bar) ====== */
-      .topbar{
-        border: 1px solid rgba(255,255,255,0.10);
-        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-        border-radius: 18px;
-        padding: 0.9rem 1.1rem;
-        box-shadow: 0 12px 28px rgba(0,0,0,0.30);
-      }
+    #   .topbar{
+    #     border: 1px solid rgba(255,255,255,0.10);
+    #     background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    #     border-radius: 18px;
+    #     padding: 0.9rem 1.1rem;
+    #     box-shadow: 0 12px 28px rgba(0,0,0,0.30);
+    #   }
       .brand{
         font-weight: 900;
         font-size: 1.05rem;
@@ -294,7 +294,7 @@ with top:
     with left:
         st.markdown(
             """
-            <div class="topbar">
+            <div class="ftopbar">
               <div class="brand"><span>▮▮▮</span> MetriX <span style="color:rgba(255,255,255,0.55); font-weight:700;">| Analytics</span></div>
               <div class="navhint">Real-time sales dashboard · Forecast & predictions</div>
             </div>
