@@ -5,40 +5,45 @@ from datetime import date
 from pathlib import Path
 
 # ============================================================
-# Page config
+# Page config (IMPORTANT: expanded so you don't "lose" it)
 # ============================================================
 st.set_page_config(
-    page_title="Walmart Sales Forecasting",
+    page_title="Walmart Weekly Sales Forecasting",
     page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# CSS: White + Blue/Purple, force dark text everywhere
+# CSS: White + Blue/Purple theme, KEEP header (for sidebar toggle)
 # ============================================================
 st.markdown(
     """
     <style>
-      /* Hide Streamlit header/toolbar */
-      [data-testid="stHeader"] { display: none !important; }
-      [data-testid="stToolbar"] { display: none !important; }
+      /* Hide menu + footer only (DO NOT hide header, or sidebar toggle disappears) */
       #MainMenu { visibility: hidden; }
       footer { visibility: hidden; }
 
-      /* Base page background */
+      /* Make the top header/toolbar clean (no ugly dark bar) */
+      [data-testid="stHeader"]{
+        background: rgba(255,255,255,0.85) !important;
+        border-bottom: 1px solid rgba(15,23,42,0.08) !important;
+        backdrop-filter: blur(10px);
+      }
+      [data-testid="stToolbar"]{
+        background: transparent !important;
+      }
+
+      /* Page background */
       [data-testid="stAppViewContainer"]{
-        background: linear-gradient(180deg, #f6f7ff 0%, #ffffff 55%, #f7f7ff 100%);
+        background: linear-gradient(180deg, #f6f7ff 0%, #ffffff 60%, #f7f7ff 100%);
       }
 
-      /* Force ALL text to be dark */
-      html, body, [class*="css"]  {
-        color: #0f172a !important;
-      }
-      h1, h2, h3, h4, h5, h6, p, span, label, div {
-        color: #0f172a !important;
-      }
+      /* Force text dark */
+      html, body, [class*="css"] { color: #0f172a !important; }
+      h1,h2,h3,h4,h5,h6,p,span,div,label { color:#0f172a !important; }
 
-      /* Main container spacing */
+      /* Container spacing */
       .block-container{
         padding-top: 1.2rem;
         padding-bottom: 2rem;
@@ -51,16 +56,8 @@ st.markdown(
         border-right: 1px solid rgba(15,23,42,0.10);
       }
 
-      .sb-title{
-        font-size: 1.15rem;
-        font-weight: 900;
-        margin: 0.2rem 0 0.1rem 0;
-      }
-      .sb-sub{
-        font-size: 0.9rem;
-        color: rgba(15,23,42,0.65) !important;
-        margin-bottom: 1rem;
-      }
+      .sb-title{ font-size: 1.1rem; font-weight: 900; margin: 0.2rem 0 0.1rem 0; }
+      .sb-sub{ font-size: 0.9rem; color: rgba(15,23,42,0.65) !important; margin-bottom: 0.8rem; }
 
       /* Cards */
       .card{
@@ -72,7 +69,7 @@ st.markdown(
       }
       .card-soft{
         background: #ffffff;
-        border: 1px dashed rgba(99,102,241, 0.40);
+        border: 1px dashed rgba(99,102,241, 0.45);
         border-radius: 18px;
         padding: 1rem 1.1rem;
       }
@@ -81,7 +78,6 @@ st.markdown(
         font-size: 0.85rem;
         color: rgba(15,23,42,0.65) !important;
         font-weight: 800;
-        letter-spacing: 0.2px;
       }
       .kpi-value{
         font-size: 1.7rem;
@@ -96,12 +92,9 @@ st.markdown(
         color: rgba(15,23,42,0.65) !important;
         margin-top: 0.25rem;
       }
+      .muted{ color: rgba(15,23,42,0.65) !important; }
 
-      .muted{
-        color: rgba(15,23,42,0.65) !important;
-      }
-
-      /* Inputs: make them white with dark text */
+      /* Inputs */
       [data-baseweb="select"] > div,
       .stNumberInput input,
       .stDateInput input,
@@ -111,12 +104,7 @@ st.markdown(
         border: 1px solid rgba(15,23,42,0.14) !important;
         color: #0f172a !important;
       }
-
-      /* Labels */
-      label, .stSelectbox label, .stDateInput label, .stNumberInput label, .stSlider label {
-        color: rgba(15,23,42,0.85) !important;
-        font-weight: 800 !important;
-      }
+      label{ color: rgba(15,23,42,0.85) !important; font-weight: 800 !important; }
 
       /* Sidebar radio menu */
       div[role="radiogroup"] label{
@@ -137,25 +125,36 @@ st.markdown(
       .stButton>button, .stDownloadButton>button {
         border-radius: 14px !important;
         border: 1px solid rgba(99,102,241,0.28) !important;
-        background: linear-gradient(180deg, rgba(99,102,241,0.22), rgba(99,102,241,0.12)) !important;
+        background: linear-gradient(180deg, rgba(99,102,241,0.22), rgba(99,102,241,0.10)) !important;
         color: #0f172a !important;
         font-weight: 900 !important;
         padding: 0.75rem 1rem !important;
       }
       .stButton>button:hover, .stDownloadButton>button:hover {
         border: 1px solid rgba(124,58,237,0.35) !important;
-        background: linear-gradient(180deg, rgba(124,58,237,0.25), rgba(124,58,237,0.12)) !important;
+        background: linear-gradient(180deg, rgba(124,58,237,0.25), rgba(124,58,237,0.10)) !important;
       }
 
       /* Dataframe */
       .stDataFrame { border-radius: 14px; overflow: hidden; }
+
+      /* Tiny tip pill */
+      .tip-pill{
+        display:inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(37,99,235,0.10);
+        border: 1px solid rgba(37,99,235,0.18);
+        font-weight: 800;
+        color: rgba(15,23,42,0.75) !important;
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# Load model + feature columns (safe path)
+# Load model + columns (safe path for Streamlit Cloud)
 # ============================================================
 APP_DIR = Path(__file__).parent
 MODEL_PATH = APP_DIR / "model.pkl"
@@ -164,13 +163,11 @@ COLS_PATH = APP_DIR / "columns.pkl"
 @st.cache_resource
 def load_artifacts():
     if not MODEL_PATH.exists() or not COLS_PATH.exists():
-        st.error("⚠️ model.pkl / columns.pkl not found. Put them beside app.py")
+        st.error("⚠️ model.pkl / columns.pkl not found. Make sure they are beside app.py in the repo.")
         st.stop()
-
     model = joblib.load(MODEL_PATH)
     cols = joblib.load(COLS_PATH)
-    if not isinstance(cols, list):
-        cols = list(cols)
+    cols = list(cols) if not isinstance(cols, list) else cols
     return model, cols
 
 model, feature_cols = load_artifacts()
@@ -183,14 +180,10 @@ def money(x: float) -> str:
 
 def validate_inputs(temp, fuel, cpi, unemp):
     issues = []
-    if fuel < 0:
-        issues.append("Fuel Price must be ≥ 0.")
-    if cpi < 0:
-        issues.append("CPI must be ≥ 0.")
-    if not (-10 <= temp <= 120):
-        issues.append("Temperature should be between -10°F and 120°F.")
-    if not (0 <= unemp <= 25):
-        issues.append("Unemployment should be between 0% and 25%.")
+    if fuel < 0: issues.append("Fuel Price must be ≥ 0.")
+    if cpi < 0: issues.append("CPI must be ≥ 0.")
+    if not (-10 <= temp <= 120): issues.append("Temperature should be between -10°F and 120°F.")
+    if not (0 <= unemp <= 25): issues.append("Unemployment should be between 0% and 25%.")
     return issues
 
 def build_features(store, holiday_flag, temp, fuel, cpi, unemp, week_date):
@@ -217,7 +210,10 @@ def predict_one(store, holiday_flag, temp, fuel, cpi, unemp, week_date):
     return pred, X
 
 # ============================================================
-# Defaults (RESET = set numeric to 0)
+# Defaults
+# Reset requirement: "set everything to 0 again"
+# (Store cannot be 0 because dropdown; date cannot be 0 because it must be a date)
+# So we reset numeric values to 0 + keep store=1 + keep a default date.
 # ============================================================
 RESET_DEFAULTS = {
     "store": 1,
@@ -240,7 +236,7 @@ EXAMPLE = {
 }
 
 # ============================================================
-# Session state init
+# Session State init
 # ============================================================
 for k, v in RESET_DEFAULTS.items():
     if k not in st.session_state:
@@ -252,7 +248,7 @@ if "history" not in st.session_state:
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
 
-# Widget keys (separate from state keys)
+# Widget keys (separate to avoid session_state mutation errors)
 WIDGET_MAP = {
     "store_w": "store",
     "week_date_w": "week_date",
@@ -271,9 +267,7 @@ def sync_widgets_to_state():
     for w_key, state_key in WIDGET_MAP.items():
         st.session_state[state_key] = st.session_state[w_key]
 
-# ============================================================
-# Safe preset queue (prevents StreamlitAPIException)
-# ============================================================
+# Preset queue (safe)
 if "pending_preset" not in st.session_state:
     st.session_state.pending_preset = None
 
@@ -296,7 +290,7 @@ def apply_pending_preset():
     st.session_state["cpi_w"] = preset["cpi"]
     st.session_state["unemp_w"] = preset["unemp"]
 
-    # ALSO clear results on reset
+    # Reset also clears output + history
     if name == "reset":
         st.session_state.history = []
         st.session_state.last_result = None
@@ -310,7 +304,7 @@ apply_pending_preset()
 # Sidebar
 # ============================================================
 with st.sidebar:
-    st.markdown('<div class="sb-title">Walmart Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-title">📊 Walmart Dashboard</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-sub">Forecasting + analytics</div>', unsafe_allow_html=True)
 
     page = st.radio(
@@ -381,10 +375,11 @@ unemp = st.session_state.unemp
 week_date = st.session_state.week_date
 
 # ============================================================
-# Header (simple, clean)
+# Main header + obvious sidebar tip
 # ============================================================
 st.markdown("## Walmart Weekly Sales Forecasting")
 st.markdown('<div class="muted">Predict weekly sales using store + economic indicators. Includes what-if comparison.</div>', unsafe_allow_html=True)
+st.markdown('<span class="tip-pill">Tip: If you collapse the sidebar, use the small arrow (>) at the top-left to open it again.</span>', unsafe_allow_html=True)
 st.markdown("")
 
 # ============================================================
@@ -403,14 +398,11 @@ if page == "🏠 Overview":
     with k1:
         val = money(last_pred["pred"]) if (last_pred and last_pred.get("mode") == "single") else "—"
         st.markdown(f"""<div class="card"><div class="kpi-title">Latest Forecast</div><div class="kpi-value">{val}</div><div class="kpi-sub">Most recent</div></div>""", unsafe_allow_html=True)
-
     with k2:
         st.markdown(f"""<div class="card"><div class="kpi-title">Selected Store</div><div class="kpi-value">{store}</div><div class="kpi-sub">Current input</div></div>""", unsafe_allow_html=True)
-
     with k3:
         wt = "Holiday" if holiday_flag == 1 else "Non-holiday"
         st.markdown(f"""<div class="card"><div class="kpi-title">Week Type</div><div class="kpi-value">{wt}</div><div class="kpi-sub">Seasonality</div></div>""", unsafe_allow_html=True)
-
     with k4:
         st.markdown(f"""<div class="card"><div class="kpi-title">Predictions</div><div class="kpi-value">{len(st.session_state.history)}</div><div class="kpi-sub">This session</div></div>""", unsafe_allow_html=True)
 
@@ -514,12 +506,6 @@ elif page == "🧮 Predict":
                 with c:
                     st.markdown(f"""<div class="card"><div class="kpi-title">Uplift</div><div class="kpi-value">{money(res["diff"])}</div><div class="kpi-sub">{res["pct"]:.2f}% change</div></div>""", unsafe_allow_html=True)
 
-                with st.expander("See both feature inputs"):
-                    st.write("Non-holiday features:")
-                    st.dataframe(res["X_non"], use_container_width=True)
-                    st.write("Holiday features:")
-                    st.dataframe(res["X_hol"], use_container_width=True)
-
         st.markdown("### Session History")
         if len(st.session_state.history) == 0:
             st.caption("No predictions yet.")
@@ -564,7 +550,7 @@ elif page == "🧮 Predict":
 
 elif page == "📈 Insights":
     st.markdown("## Insights")
-    st.markdown('<div class="muted">Business interpretation of predicted outputs.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="muted">Simple analytics from your session predictions.</div>', unsafe_allow_html=True)
 
     hist = pd.DataFrame(st.session_state.history) if len(st.session_state.history) else pd.DataFrame()
     if len(hist):
